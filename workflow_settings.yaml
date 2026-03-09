@@ -1,4 +1,4 @@
 defaultProject: toolkit-retail-media
 defaultDataset: silver_retail
 defaultLocation: us-east1
-assertionDataset: dataform_assertions
+assertionSchema: dataform_assertions
