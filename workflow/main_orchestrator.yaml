@@ -1,39 +1,44 @@
 main:
+  params: [args]
   steps:
     - init:
         assign:
           - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
-          - yesterday: ${text.split(time.format(time.now() - 86400), "T")[0]} # Formato YYYY-MM-DD
-          - ga4_table_suffix: ${text.replace(yesterday, "-", "")} # Formato YYYYMMDD
+          - location: "us-east1"
+          - repository: "toolkit-retail-media"
+          # Cálculo de ontem (D-1) com a sintaxe correta de função ()
+          - yesterday_ts: ${time.now() - 86400}
+          - yesterday_date: ${text.split(time.format(yesterday_ts), "T")[0]}
+          - ga4_suffix: ${text.replace(yesterday_date, "-", "")}
 
-    - check_ga4_data:
+    - check_data_availability:
         call: googleapis.bigquery.v2.jobs.query
         args:
           projectId: ${project_id}
           body:
             useLegacySql: false
-            query: ${"SELECT count(*) as qtd FROM `analytics_123456789.events_" + ga4_table_suffix + "`"}
-        result: ga4_result
+            # Verifica se a tabela do dia anterior (sharded) existe no GA4
+            query: ${"SELECT count(*) as total FROM `analytics_123456789.events_" + ga4_suffix + "`"}
+        result: bq_check
 
-    - check_ads_data:
-        call: googleapis.bigquery.v2.jobs.query
-        args:
-          projectId: ${project_id}
-          body:
-            useLegacySql: false
-            query: ${"SELECT count(*) as qtd FROM `google_ads_raw.campaign_performance_report` WHERE segments_date = '" + yesterday + "'"}
-        result: ads_result
-
-    - validation_logic:
+    - decision_step:
         switch:
-          - condition: ${int(ga4_result.rows[0].f[0].v) > 0 and int(ads_result.rows[0].f[0].v) > 0}
-            next: run_dataform
-        next: stop_no_data
+          - condition: ${int(bq_check.rows[0].f[0].v) > 0}
+            next: trigger_dataform
+        next: finish_no_data
 
-    - run_dataform:
-        # Aqui o Workflow chamaria a API do Dataform para rodar as transformações
-        # Por enquanto, vamos simular com um log
-        return: "Dados D-1 validados! Iniciando transformações Dataform..."
+    - trigger_dataform:
+        call: http.post
+        args:
+          url: ${"https://dataform.googleapis.com/v1beta1/projects/" + project_id + "/locations/" + location + "/repositories/" + repository + "/workflowInvocations"}
+          auth:
+            type: OAuth2
+          body:
+            compilationResult: ${"projects/" + project_id + "/locations/" + location + "/repositories/" + repository + "/compilationResults/main"}
+        result: invocation_result
 
-    - stop_no_data:
-        return: "ERRO: Dados de ontem (D-1) não encontrados. Pipeline interrompido."
+    - finish_success:
+        return: ${"Pipeline Dataform disparado com sucesso para a data " + yesterday_date}
+
+    - finish_no_data:
+        return: ${"Dados de GA4 para " + yesterday_date + " ainda não disponíveis. Execução abortada."}
