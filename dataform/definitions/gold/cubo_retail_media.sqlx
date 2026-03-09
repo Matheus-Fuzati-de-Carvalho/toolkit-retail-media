@@ -1,0 +1,80 @@
+config {
+  type: "table",
+  schema: "gold_retail",
+  name: "cubo_retail_media",
+  description: "Cubo unificado de performance Retail Media: Ads + GA4 + Salesforce",
+  bigquery: {
+    partitionBy: "data_referencia",
+    clusterBy: ["utm_campaign", "stage_venda"]
+  }
+}
+
+WITH 
+-- 1. Agregando Dados de Mídia (Ads)
+ads_aggregated AS (
+  SELECT
+    segments_date AS data_referencia,
+    campaign_name AS utm_campaign,
+    SUM(metrics_impressions) AS total_impressoes,
+    SUM(metrics_clicks) AS total_cliques_ads,
+    SUM(metrics_cost_micros / 1000000) AS investimento_media
+  FROM
+    ${ref("google_ads_raw", "campaign_performance_report")}
+  GROUP BY 1, 2
+),
+
+-- 2. Agregando Dados de Navegação (GA4 - vindo da Silver que você criou)
+ga4_aggregated AS (
+  SELECT
+    event_date_parsed AS data_referencia,
+    utm_campaign,
+    COUNT(DISTINCT IF(event_name = 'session_start', user_pseudo_id, NULL)) AS total_sessoes,
+    COUNT(DISTINCT IF(event_name = 'view_item', user_pseudo_id, NULL)) AS visualizacoes_produto,
+    COUNT(DISTINCT IF(event_name = 'purchase', user_pseudo_id, NULL)) AS transacoes_ga4
+  FROM
+    ${ref("stg_ga4_events")} -- Referência à tabela Silver
+  GROUP BY 1, 2
+),
+
+-- 3. Agregando Conversões Reais (Salesforce)
+salesforce_aggregated AS (
+  SELECT
+    CloseDate AS data_referencia,
+    -- No mundo real, aqui usaríamos uma tabela de DE-PARA ou link via User_ID
+    -- Para o Toolkit, vamos simular o agrupamento por data
+    StageName AS stage_venda,
+    COUNT(DISTINCT Id) AS qtd_oportunidades,
+    SUM(Amount) AS receita_confirmada
+  FROM
+    ${ref("salesforce_raw", "Opportunity")}
+  GROUP BY 1, 2
+)
+
+-- 4. JOIN FINAL: O CUBO
+SELECT
+  COALESCE(a.data_referencia, g.data_referencia, s.data_referencia) AS data_referencia,
+  COALESCE(a.utm_campaign, g.utm_campaign, 'Organico/Nao Mapeado') AS utm_campaign,
+  
+  -- Métricas de Mídia
+  IFNULL(a.total_impressoes, 0) AS impressoes,
+  IFNULL(a.total_cliques_ads, 0) AS cliques_ads,
+  IFNULL(a.investimento_media, 0) AS custo,
+  
+  -- Métricas de Site
+  IFNULL(g.total_sessoes, 0) AS sessoes,
+  IFNULL(g.visualizacoes_produto, 0) AS pageviews_produto,
+  
+  -- Métricas de Negócio (Salesforce)
+  IFNULL(s.receita_confirmada, 0) AS receita_crm,
+  IFNULL(s.qtd_oportunidades, 0) AS leads_concluidos,
+  
+  -- KPIs Calculados (Engenharia entregando valor)
+  SAFE_DIVIDE(a.total_cliques_ads, a.total_impressoes) AS ctr,
+  SAFE_DIVIDE(s.receita_confirmada, a.investimento_media) AS roas_real
+
+FROM
+  ads_aggregated a
+FULL OUTER JOIN
+  ga4_aggregated g ON a.data_referencia = g.data_referencia AND a.utm_campaign = g.utm_campaign
+FULL OUTER JOIN
+  salesforce_aggregated s ON COALESCE(a.data_referencia, g.data_referencia) = s.data_referencia

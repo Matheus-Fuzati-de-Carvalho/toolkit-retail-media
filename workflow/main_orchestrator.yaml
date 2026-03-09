@@ -1,0 +1,39 @@
+main:
+  steps:
+    - init:
+        assign:
+          - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - yesterday: ${text.split(time.format(time.now() - 86400), "T")[0]} # Formato YYYY-MM-DD
+          - ga4_table_suffix: ${text.replace(yesterday, "-", "")} # Formato YYYYMMDD
+
+    - check_ga4_data:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            useLegacySql: false
+            query: ${"SELECT count(*) as qtd FROM `analytics_123456789.events_" + ga4_table_suffix + "`"}
+        result: ga4_result
+
+    - check_ads_data:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            useLegacySql: false
+            query: ${"SELECT count(*) as qtd FROM `google_ads_raw.campaign_performance_report` WHERE segments_date = '" + yesterday + "'"}
+        result: ads_result
+
+    - validation_logic:
+        switch:
+          - condition: ${int(ga4_result.rows[0].f[0].v) > 0 and int(ads_result.rows[0].f[0].v) > 0}
+            next: run_dataform
+        next: stop_no_data
+
+    - run_dataform:
+        # Aqui o Workflow chamaria a API do Dataform para rodar as transformações
+        # Por enquanto, vamos simular com um log
+        return: "Dados D-1 validados! Iniciando transformações Dataform..."
+
+    - stop_no_data:
+        return: "ERRO: Dados de ontem (D-1) não encontrados. Pipeline interrompido."
