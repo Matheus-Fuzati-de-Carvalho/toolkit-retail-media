@@ -1,0 +1,9 @@
+{
+  "defaultDatabase": "toolkit-retail-media",
+  "defaultSchema": "silver_retail",
+  "assertionSchema": "dataform_assertions",
+  "projectConfig": {
+    "warehouse": "bigquery",
+    "defaultLocation": "us-east1"
+  }
+}

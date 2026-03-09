@@ -1,0 +1,20 @@
+-- Declarando a base bruta do GA4 (Ontem)
+declare {
+  database: "toolkit-retail-media",
+  schema: "analytics_123456789",
+  name: "events_20260308"
+}
+
+-- Declarando a base bruta de Google Ads
+declare {
+  database: "toolkit-retail-media",
+  schema: "google_ads_raw",
+  name: "campaign_performance_report"
+}
+
+-- Declarando a base bruta do Salesforce
+declare {
+  database: "toolkit-retail-media",
+  schema: "salesforce_raw",
+  name: "Opportunity"
+}

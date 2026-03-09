@@ -1,0 +1,6 @@
+{
+  "name": "toolkit-retail-media",
+  "dependencies": {
+    "@dataform/core": "2.9.0"
+  }
+}

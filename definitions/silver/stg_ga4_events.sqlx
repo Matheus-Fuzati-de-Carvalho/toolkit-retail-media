@@ -2,7 +2,7 @@ config {
   type: "incremental",
   schema: "silver_retail",
   name: "stg_ga4_events",
-  description: "Tratamento de dados aninhados do GA4",
+  description: "Limpeza e unnesting dos eventos de GA4",
   bigquery: {
     partitionBy: "event_date_parsed"
   }
@@ -13,13 +13,13 @@ SELECT
   event_timestamp,
   event_name,
   user_pseudo_id,
-  -- Extraindo a campanha de dentro do array aninhado
+  -- Lógica de extração de parâmetros aninhados (Padrão nativo GA4)
   (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'campaign') AS utm_campaign,
-  -- Extraindo a página
   (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location') AS page_path,
   device.category AS device_category,
   geo.city AS geo_city
 FROM
-  ${ref("analytics_123456789", "events_*")}
+  ${ref("events_20260308")}
 WHERE
-  _TABLE_SUFFIX = FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY))
+  -- Garante idempotência no processamento incremental
+  PARSE_DATE('%Y%m%d', event_date) = DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
