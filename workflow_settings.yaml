@@ -1,4 +1,4 @@
 defaultProject: toolkit-retail-media
-defaultDataset: dataform
-defaultAssertionDataset: dataform_assertions
-dataformCoreVersion: 3.0.42
+defaultDataset: silver_retail
+defaultLocation: us-east1
+assertionDataset: dataform_assertions
