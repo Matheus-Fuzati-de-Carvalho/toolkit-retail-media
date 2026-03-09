@@ -3,13 +3,12 @@ main:
   steps:
     - init:
         assign:
-          - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - project_id: "${sys.get_env('GOOGLE_CLOUD_PROJECT_ID')}"
           - location: "us-east1"
           - repository: "toolkit-retail-media"
-          # Cálculo de ontem (D-1) com a sintaxe correta de função ()
-          - yesterday_ts: ${time.now() - 86400}
-          - yesterday_date: ${text.split(time.format(yesterday_ts), "T")[0]}
-          - ga4_suffix: ${text.replace(yesterday_date, "-", "")}
+          - yesterday_ts: "${time.now() - 86400}"
+          - yesterday_date: "${text.split(time.format(yesterday_ts), 'T')[0]}"
+          - ga4_suffix: "${text.replace(yesterday_date, '-', '')}"
 
     - check_data_availability:
         call: googleapis.bigquery.v2.jobs.query
@@ -17,28 +16,27 @@ main:
           projectId: ${project_id}
           body:
             useLegacySql: false
-            # Verifica se a tabela do dia anterior (sharded) existe no GA4
-            query: ${"SELECT count(*) as total FROM `analytics_123456789.events_" + ga4_suffix + "`"}
+            query: "${'SELECT count(*) as total FROM `analytics_123456789.events_' + ga4_suffix + '`'}"
         result: bq_check
 
     - decision_step:
         switch:
-          - condition: ${int(bq_check.rows[0].f[0].v) > 0}
+          - condition: "${int(bq_check.rows[0].f[0].v) > 0}"
             next: trigger_dataform
         next: finish_no_data
 
     - trigger_dataform:
         call: http.post
         args:
-          url: ${"https://dataform.googleapis.com/v1beta1/projects/" + project_id + "/locations/" + location + "/repositories/" + repository + "/workflowInvocations"}
+          url: "${'https://dataform.googleapis.com/v1beta1/projects/' + project_id + '/locations/' + location + '/repositories/' + repository + '/workflowInvocations'}"
           auth:
             type: OAuth2
           body:
-            compilationResult: ${"projects/" + project_id + "/locations/" + location + "/repositories/" + repository + "/compilationResults/main"}
+            compilationResult: "${'projects/' + project_id + '/locations/' + location + '/repositories/' + repository + '/compilationResults/main'}"
         result: invocation_result
 
     - finish_success:
-        return: ${"Pipeline Dataform disparado com sucesso para a data " + yesterday_date}
+        return: "${'Pipeline Dataform disparado com sucesso para a data ' + yesterday_date}"
 
     - finish_no_data:
-        return: ${"Dados de GA4 para " + yesterday_date + " ainda não disponíveis. Execução abortada."}
+        return: "${'Dados de GA4 para ' + yesterday_date + ' ainda não disponíveis. Execução abortada.'}"
