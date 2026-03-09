@@ -7,38 +7,43 @@ main:
           - location: "us-east1"
           - repository: "toolkit-retail-media"
 
-    - get_dates_from_bq:
+    - get_dates:
         call: googleapis.bigquery.v2.jobs.query
         args:
           projectId: ${project_id}
           body:
             useLegacySql: false
-            query: "SELECT FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)) as suffix, FORMAT_DATE('%Y-%m-%d', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)) as date"
-        result: bq_date_res
+            query: "SELECT FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)) as suffix"
+        result: bq_date
 
-    - assign_vars:
-        assign:
-          - table_suffix: ${bq_date_res.rows[0].f[0].v}
-          - yesterday_date: ${bq_date_res.rows[0].f[1].v}
-
-    - check_if_table_exists:
+    - check_bq_data:
         call: googleapis.bigquery.v2.jobs.query
         args:
           projectId: ${project_id}
           body:
             useLegacySql: false
-            query: ${"SELECT count(*) FROM analytics_123456789.events_" + table_suffix}
+            query: ${"SELECT count(*) FROM analytics_123456789.events_" + bq_date.rows[0].f[0].v}
         result: bq_check
 
-    - trigger_dataform:
+    - create_compilation:
+        call: http.post
+        args:
+          url: ${"https://dataform.googleapis.com/v1beta1/projects/" + project_id + "/locations/" + location + "/repositories/" + repository + "/compilationResults"}
+          auth:
+            type: OAuth2
+          body:
+            gitCommitish: "main"
+        result: compilation_res
+
+    - trigger_dataform_run:
         call: http.post
         args:
           url: ${"https://dataform.googleapis.com/v1beta1/projects/" + project_id + "/locations/" + location + "/repositories/" + repository + "/workflowInvocations"}
           auth:
             type: OAuth2
           body:
-            compilationResult: ${"projects/" + project_id + "/locations/" + location + "/repositories/" + repository + "/compilationResults/main"}
-        result: df_res
+            compilationResult: ${compilation_res.body.name}
+        result: invocation_res
 
     - final_result:
-        return: ${df_res}
+        return: ${invocation_res.body}
