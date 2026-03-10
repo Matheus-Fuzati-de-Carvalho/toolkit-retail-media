@@ -1,6 +1,4 @@
-Este é o Guia Definitivo de Implementação do Toolkit Retail Media v4. Este documento foi consolidado após a validação técnica de todos os gargalos de permissões e erros de sintaxe encontrados nas versões anteriores.
-
-📑 Documentação Oficial: Retail Media Toolkit v4
+📑 Documentação Oficial: Retail Media Toolkit
 Esta arquitetura utiliza Dataform para transformação, Cloud Workflows para orquestração inteligente e Cloud Scheduler para automação diária.
 
 🛠️ Fase 1: Infraestrutura e Base de Dados
